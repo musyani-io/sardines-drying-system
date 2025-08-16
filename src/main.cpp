@@ -17,9 +17,14 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 boolean dhtStatus = false;
 boolean fanStatus = false;
 boolean htrStatus = false;
+boolean timeStatus = false;
 const float highTemp = 45;
-const float lowTemp = 30;
+const float lowTemp = 35;
+String dhtStr, fanHtrStr;
 unsigned long currentMillis = 0;
+unsigned long lastAction = 0;
+const unsigned long lcdInterval = 1500;
+const unsigned long clearInterval = 3000;
 
 // Function declaration
 void displayInLcd(int col, int row, String message);
@@ -38,31 +43,39 @@ void setup() {
 }
 
 void loop() {
-    lcd.clear();
     float temp = dht.readTemperature();
     float humidity = dht.readHumidity();
+    currentMillis = millis();
 
-    if (isnan(temp) || isnan(humidity)) {
+    if (isnan(temp) || isnan(humidity)) {   // Checks DHT integrity
         Serial.println("DHT Sensor error!");
+        displayInLcd(0, 0, "DHT error!");
         dhtStatus = false;
     }
     else {
         dhtStatus = true;
-        String dhtStr = "T: " + String(temp, 1) + "°C H: " + String(humidity, 1) + "%";
-        Serial.println(dhtStr);
+        dhtStr = "T: " + String(temp, 1) + "°C H: " + String(humidity, 1) + "%";
+        // Serial.println(dhtStr);
     }
 
-    if (temp > highTemp) {
+    if (temp > highTemp) {      // Validates the threshold
         digitalWrite(FAN_PIN, HIGH);
         digitalWrite(HTR_PIN, LOW);
-        Serial.println("Fan ON, Heater OFF");
+        fanHtrStr = "FAN: ON HTR: OFF";
+        // Serial.println("Fan ON, Heater OFF");
     }
     else if (temp < lowTemp) {
         digitalWrite(FAN_PIN, LOW);
         digitalWrite(HTR_PIN, HIGH);
-        Serial.println("Fan OFF, Heater ON");
+        fanHtrStr = "FAN: OFF HTR: ON";
+        // Serial.println("Fan OFF, Heater ON");
     }
 
+    if (currentMillis - lastAction >= lcdInterval) {
+        lastAction = currentMillis;
+        displayInLcd(0, 0, dhtStr);
+        displayInLcd(0, 1, fanHtrStr);
+    }
 }
 
 void displayInLcd(int col, int row, String message) {
@@ -71,5 +84,5 @@ void displayInLcd(int col, int row, String message) {
 }
 
 /*
-    Write a function for a timer in order to display the variables after some interval.
+    Write a timer code to replace the many variable declared above.
 */
