@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <DHT.h>
+#include <HX711.h>
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>
 
@@ -11,23 +12,27 @@
 #define LD_CLK 12
 
 DHT dht(DHT_PIN, DHT_TYPE);
+HX711 scale;
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Global variables
-boolean dhtStatus = false;
+boolean dhtStatus = false;  // Control statuses
 boolean fanStatus = false;
 boolean htrStatus = false;
 boolean timeStatus = false;
-const float highTemp = 45;
-const float lowTemp = 35;
-String dhtStr, fanHtrStr;
-unsigned long currentMillis = 0;
+boolean weightStatus = false;
+float intialWeight = 0.0;
+float finalWeight = 0.0;
+const float highTemp = 45;  // Threshold values
+const float lowTemp = 35;   
+String dhtStr, fanHtrStr;   // Control Strings for display
+unsigned long currentMillis = 0;    // Timer variables
 unsigned long lastAction = 0;
-const unsigned long lcdInterval = 1500;
-const unsigned long clearInterval = 3000;
 
 // Function declaration
 void displayInLcd(int col, int row, String message);
+boolean afterSeconds(unsigned long seconds);
+void calibrateWeight();
 
 void setup() {
     dht.begin();
@@ -40,6 +45,22 @@ void setup() {
 
     displayInLcd(0, 0, "Booting...");
     delay(2000);
+
+    scale.begin(LD_DO, LD_CLK);
+    scale.set_scale();  // Set scale to default
+    scale.tare();   // Reset the scale to 0
+
+    Serial.println("Put the load on scale");
+    displayInLcd(0, 0, "Put the load");
+    displayInLcd(2, 1, "on the scale");
+    while (!weightStatus) {
+        intialWeight = scale.get_units(10);
+        if (intialWeight > 1.0) {
+            weightStatus = true;
+        }
+        Serial.println("Put the load on scale");
+        delay(100);
+    }
 }
 
 void loop() {
@@ -54,7 +75,7 @@ void loop() {
     }
     else {
         dhtStatus = true;
-        dhtStr = "T: " + String(temp, 1) + "°C H: " + String(humidity, 1) + "%";
+        dhtStr = "T: " + String(temp, 1) + "C H: " + String(humidity, 1) + "%";
         // Serial.println(dhtStr);
     }
 
@@ -70,9 +91,11 @@ void loop() {
         fanHtrStr = "FAN: OFF HTR: ON";
         // Serial.println("Fan OFF, Heater ON");
     }
+    else {
+        fanHtrStr = "FAN:OFF HTR: OFF";
+    }
 
-    if (currentMillis - lastAction >= lcdInterval) {
-        lastAction = currentMillis;
+    if (afterSeconds(1UL)) {
         displayInLcd(0, 0, dhtStr);
         displayInLcd(0, 1, fanHtrStr);
     }
@@ -83,6 +106,17 @@ void displayInLcd(int col, int row, String message) {
     lcd.print(message);
 }
 
-/*
-    Write a timer code to replace the many variable declared above.
-*/
+boolean afterSeconds(unsigned long seconds) {
+    seconds = 1000 * seconds;
+    if (currentMillis - lastAction >= seconds) {
+        lastAction = currentMillis;
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+void calibrateWeight() {
+    // Write a calibrating weight function.
+}
