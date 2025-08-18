@@ -16,8 +16,8 @@ HX711 scale;
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Global variables
-boolean dhtStatus, fanStatus, htrStatus, timeStatus, weightStatus;  // Control statuses
-float intialWeight, currentWeight, finalWeight, temp, humidity, calibratedFactor, rawValue, weightLoss;
+boolean dhtStatus, fanStatus, htrStatus, timeStatus, weightStatus, dryStatus;  // Control statuses
+float intialWeight, currentWeight, temp, humidity, calibratedFactor, rawValue, weightLoss;
 const float highTemp = 45;  // Threshold values
 const float lowTemp = 35;   
 String dhtStr, fanHtrStr, cellStr, lossStr;   // Control Strings for display
@@ -27,6 +27,7 @@ unsigned long lastActionCell = 0;
 
 // Function declaration
 void displayInLcd(int col, int row, String message);
+void lightSleep();
 boolean afterSeconds(unsigned long seconds);
 
 void setup() {
@@ -53,58 +54,69 @@ void setup() {
 }
 
 void loop() {
-    temp = dht.readTemperature();
-    humidity = dht.readHumidity();
-    currentWeight = scale.get_units(5);
-    currentMillis = millis();
+    while (!dryStatus) {    // For dryStatus = false, if the sardines are wet
+        temp = dht.readTemperature();
+        humidity = dht.readHumidity();
+        currentWeight = scale.get_units(5);
+        currentMillis = millis();
 
-    if (isnan(temp) || isnan(humidity)) {   // Checks DHT integrity
-        Serial.println("DHT Sensor error!");
-        displayInLcd(0, 0, "DHT error!");
-        dhtStatus = false;
-    }
-    else {
-        dhtStatus = true;
-        dhtStr = "T: " + String(temp, 1) + "C H: " + String(humidity, 1) + "%";
-        // Serial.println(dhtStr);
-    }
+        if (isnan(temp) || isnan(humidity)) {   // Checks DHT integrity
+            Serial.println("DHT Sensor error!");
+            displayInLcd(0, 0, "DHT error!");
+            dhtStatus = false;
+        }
+        else {
+            dhtStatus = true;
+            dhtStr = "T: " + String(temp, 1) + "C H: " + String(humidity, 1) + "%";
+            // Serial.println(dhtStr);
+        }
 
-    if (temp > highTemp) {      // Validates the threshold
-        digitalWrite(FAN_PIN, HIGH);
-        digitalWrite(HTR_PIN, LOW);
-        fanHtrStr = "FAN: ON HTR: OFF";
-        // Serial.println("Fan ON, Heater OFF");
-    }
-    else if (temp < lowTemp) {
-        digitalWrite(FAN_PIN, LOW);
-        digitalWrite(HTR_PIN, HIGH);
-        fanHtrStr = "FAN: OFF HTR: ON";
-        // Serial.println("Fan OFF, Heater ON");
-    }
-    else {
-        fanHtrStr = "FAN:OFF HTR: OFF";
-    }
+        if (temp > highTemp) {      // Validates the threshold
+            digitalWrite(FAN_PIN, HIGH);
+            digitalWrite(HTR_PIN, LOW);
+            fanHtrStr = "FAN: ON HTR: OFF";
+            // Serial.println("Fan ON, Heater OFF");
+        }
+        else if (temp < lowTemp) {
+            digitalWrite(FAN_PIN, LOW);
+            digitalWrite(HTR_PIN, HIGH);
+            fanHtrStr = "FAN: OFF HTR: ON";
+            // Serial.println("Fan OFF, Heater ON");
+        }
+        else {
+            digitalWrite(FAN_PIN, LOW);
+            digitalWrite(HTR_PIN, LOW);
+            fanHtrStr = "FAN:OFF HTR: OFF";
+        }
 
-    // DHT and fan/heater display every 1 second
-    if (currentMillis - lastActionDHT >= 1000) {
-        lastActionDHT = currentMillis;
-        displayInLcd(0, 0, dhtStr);
-        displayInLcd(0, 1, fanHtrStr);
-    }
+        // DHT and fan/heater display every 1 second
+        if (currentMillis - lastActionDHT >= 1000) {
+            lastActionDHT = currentMillis;
+            displayInLcd(0, 0, dhtStr);
+            displayInLcd(0, 1, fanHtrStr);
+        }
 
-    // Load cell display every 2 seconds
-    cellStr = "Weight: " + String(currentWeight, 1) + " kg";
-    weightLoss = ((intialWeight - currentWeight) / (intialWeight)) * 100;
-    lossStr = "%loss: " + String(weightLoss, 2) + "%";
-    if (currentMillis - lastActionCell >= 2000) {
-        lastActionCell = currentMillis;
-        lcd.clear();
-        displayInLcd(0, 0, cellStr);
-        displayInLcd(0, 1, lossStr);
-        Serial.println("Load cell displayed!");
-    }
+        // Load cell display every 2 seconds
+        cellStr = "Weight: " + String(currentWeight, 1) + " kg";
+        weightLoss = ((intialWeight - currentWeight) / (intialWeight)) * 100;
+        lossStr = "%loss: " + String(weightLoss, 2) + "%";
+        if (currentMillis - lastActionCell >= 2000) {
+            lastActionCell = currentMillis;
+            lcd.clear();
+            displayInLcd(0, 0, cellStr);
+            displayInLcd(0, 1, lossStr);
+            // Serial.println("Load cell displayed!");
+        }
 
-    // What should the finalWeight be? (When the sardines have dried)... Its code follows.
+        if (weightLoss > 70) {      
+            dryStatus = true;
+            lcd.clear();
+            // Serial.println("70% weight is lost!");
+        }
+        // What should the finalWeight be? (When the sardines have dried)... Its code follows.
+    }
+    displayInLcd(0, 0, "Dried product!");
+    // Serial.println("Product is already dry!");
 }
 
 void displayInLcd(int col, int row, String message) {
