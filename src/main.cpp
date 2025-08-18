@@ -16,23 +16,18 @@ HX711 scale;
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Global variables
-boolean dhtStatus = false;  // Control statuses
-boolean fanStatus = false;
-boolean htrStatus = false;
-boolean timeStatus = false;
-boolean weightStatus = false;
-float intialWeight = 0.0;
-float finalWeight = 0.0;
+boolean dhtStatus, fanStatus, htrStatus, timeStatus, weightStatus;  // Control statuses
+float intialWeight, currentWeight, finalWeight, temp, humidity, calibratedFactor, rawValue, weightLoss;
 const float highTemp = 45;  // Threshold values
 const float lowTemp = 35;   
-String dhtStr, fanHtrStr;   // Control Strings for display
+String dhtStr, fanHtrStr, cellStr, lossStr;   // Control Strings for display
 unsigned long currentMillis = 0;    // Timer variables
-unsigned long lastAction = 0;
+unsigned long lastActionDHT = 0;
+unsigned long lastActionCell = 0;
 
 // Function declaration
 void displayInLcd(int col, int row, String message);
 boolean afterSeconds(unsigned long seconds);
-void calibrateWeight();
 
 void setup() {
     dht.begin();
@@ -44,28 +39,23 @@ void setup() {
     pinMode(FAN_PIN, OUTPUT);
 
     displayInLcd(0, 0, "Booting...");
-    delay(2000);
+    displayInLcd(0, 1, "Put 1 on scale");
+    delay(5000);
 
     scale.begin(LD_DO, LD_CLK);
-    scale.set_scale();  // Set scale to default
-    scale.tare();   // Reset the scale to 0
-
-    Serial.println("Put the load on scale");
-    displayInLcd(0, 0, "Put the load");
-    displayInLcd(2, 1, "on the scale");
-    while (!weightStatus) {
-        intialWeight = scale.get_units(10);
-        if (intialWeight > 1.0) {
-            weightStatus = true;
-        }
-        Serial.println("Put the load on scale");
-        delay(100);
-    }
+    scale.set_scale(scale.read());
+    lcd.clear();
+    displayInLcd(0, 0, "Insert the load");
+    delay(5000);
+    intialWeight = scale.get_units(5);
+    // Serial.println(scale.read());
+    // Serial.println(intialWeight);
 }
 
 void loop() {
-    float temp = dht.readTemperature();
-    float humidity = dht.readHumidity();
+    temp = dht.readTemperature();
+    humidity = dht.readHumidity();
+    currentWeight = scale.get_units(5);
     currentMillis = millis();
 
     if (isnan(temp) || isnan(humidity)) {   // Checks DHT integrity
@@ -95,28 +85,29 @@ void loop() {
         fanHtrStr = "FAN:OFF HTR: OFF";
     }
 
-    if (afterSeconds(1UL)) {
+    // DHT and fan/heater display every 1 second
+    if (currentMillis - lastActionDHT >= 1000) {
+        lastActionDHT = currentMillis;
         displayInLcd(0, 0, dhtStr);
         displayInLcd(0, 1, fanHtrStr);
     }
+
+    // Load cell display every 2 seconds
+    cellStr = "Weight: " + String(currentWeight, 1) + " kg";
+    weightLoss = ((intialWeight - currentWeight) / (intialWeight)) * 100;
+    lossStr = "%loss: " + String(weightLoss, 2) + "%";
+    if (currentMillis - lastActionCell >= 2000) {
+        lastActionCell = currentMillis;
+        lcd.clear();
+        displayInLcd(0, 0, cellStr);
+        displayInLcd(0, 1, lossStr);
+        Serial.println("Load cell displayed!");
+    }
+
+    // What should the finalWeight be? (When the sardines have dried)... Its code follows.
 }
 
 void displayInLcd(int col, int row, String message) {
     lcd.setCursor(col, row);
     lcd.print(message);
-}
-
-boolean afterSeconds(unsigned long seconds) {
-    seconds = 1000 * seconds;
-    if (currentMillis - lastAction >= seconds) {
-        lastAction = currentMillis;
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
-void calibrateWeight() {
-    // Write a calibrating weight function.
 }
