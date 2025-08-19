@@ -5,5 +5,7 @@
 .vscode/ipch
 
 sim_circuit/proteus/*.hex
+sim_circuit/proteus/*.pdf
 sim_circuit/proteus/*.workspace
 sim_circuit/proteus/Project Backups
+sim_circuit/easyeda-pro/sardines-drying-circuit_backup
